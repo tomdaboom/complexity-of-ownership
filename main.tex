@@ -1,7 +1,7 @@
 \documentclass{article}
 \usepackage{graphicx} % Required for inserting images
 
-\usepackage[a4paper, total={6.5in, 10.5in}]{geometry}
+\usepackage[a4paper, total={7in, 10.5in}]{geometry}
 \usepackage{hyperref}
 
 \usepackage{amsmath}
@@ -22,14 +22,20 @@
 \newcommand{\agap}{\hspace{0.25em}}
 \newcommand{\mkref}{\textbf{ref}~}
 \newcommand{\deref}{\textbf{deref}~}%{\mathbf{*}}
-\newcommand{\mutate}[3]{\textbf{mut}~ #1 \Rightarrow #2 ~\textbf{then}~ #3}
+\newcommand{\mutate}[3]{\textbf{mut}~ #1 \Leftarrow #2 ~\textbf{then}~ #3}
+\newcommand{\mutptr}[3]{\textbf{mutAt}~ #1 \Leftarrow #2 ~\textbf{then}~ #3}
+
 \newcommand{\letvar}[3]{\textbf{let}~ #1 \Leftarrow #2 ~\textbf{then}~ #3}
+\newcommand{\parfun}{\rightharpoonup}
+\newcommand{\red}{\leadsto}
+\newcommand{\bvdash}{\mathbin{\rotatebox[origin=c]{180}{$\vdash$}}}
+\newcommand{\overwrite}{\triangleright}
 
 
 \usepackage[backend=biber, maxnames=10]{biblatex}
 \addbibresource{./ref.bib}
 
-\title{The Ownership Problem}
+\title{The Ownership Problem and its Algorithmic Complexity}
 \author{\href{mailto:oi24939@bristol.ac.uk}{\texttt{Tom.Divers@bristol.ac.uk}}}
 \date{}
  
@@ -49,50 +55,84 @@
 
 \section{A Language with Pointers and Mutation}
 
-\subsection{Syntax and Types}
-
 We begin by defining a simple STLC variant with references and mutation. This language is intended to encapsulate C's pointer system, without enforcing any of the memory safety rules enforced by Rust. Later on, we will define an alternate type system for this language which \textit{does} enforce Rust's ownership and borrowing constraints.
 
-Our syntax and types are given in BNF as follows (where $k \in \mathbb{Z}$ is an integer, and $x \in V$ is a variable):
+
+\subsection{Syntax and Types}
+
+We define a set of programs $P$ and types $T$ using BNF as follows (where $k \in \mathbb{Z}$ is an integer, and $x \in V$ is a variable):
 \begin{align*}
-    M \hspace{0.5em} N ::=~ &() ~|~ k ~|~ M + N ~|~ \cdots ~|~\\ 
-    &\lambda x . M ~|~ M \agap N ~|~ (M, N) ~|~\\
+    P \ni M, N ::=~ &() ~|~ k ~|~ M + N ~|~ \cdots ~|~\\ 
+    &\lambda x . M ~|~ M \agap N ~|~ (M, N) ~|~ \textbf{fst}\agap M ~|~ \textbf{snd}\agap M ~|~\\
     &\letvar{x}{M}{N} ~|~\\ 
-    &\mutate{x}{M}{N} ~|~\\
-    &\mkref M ~|~ \deref M\\    
+    &\mutate{x}{M}{N} ~|~ \mutptr{x}{M}{N} ~|~\\
+    &\mkref x ~|~ \deref M\\    
     %&\textbf{mkStruct} ~\{ f_1 : F_1, \cdots, f_n : F_n \} ~|~ M.F
     ~\\
-    \tau \hspace{0.5em} \sigma ::=~ &\textbf{Unit} ~|~ \textbf{Int} ~|~ \tau \rightarrow \sigma ~|~ M \times N ~|~ \& \tau
+    T \ni \tau, \sigma ::=~ &\textbf{Unit} ~|~ \textbf{Int} ~|~ \tau \rightarrow \sigma ~|~ M \times N ~|~ \& \tau
 \end{align*}
 
-We include a standard set of STLC typing judgements, as well as the following rules for references and mutation:
+We include a standard set of STLC typing judgements, as well as the following rules for references and type-preserving mutations:
 \begin{align*}
-    \frac{\Gamma \vdash M : \tau}{\Gamma \vdash \mkref M : \& \tau}&\textsc{Ref}\\
+    \frac{x : \tau \in \Gamma}{\Gamma \vdash \mkref x : \& \tau}&\textsc{Ref}\\
     ~\\
     \frac{\Gamma \vdash M : \& \tau}{\Gamma \vdash \deref M : \tau}&\textsc{Deref}\\
     ~\\
-    \frac{x : \tau \in \Gamma \hspace{1em} \Gamma \vdash M : \tau \rightarrow \tau \hspace{1em} \Gamma \vdash N : \sigma }{\Gamma \vdash \mutate{x}{M}{N} : \sigma}&\textsc{Mutate}\\
+    \frac{x : \tau \in \Gamma \hspace{1em} \Gamma \vdash M : \tau \hspace{1em} \Gamma \vdash N : \sigma }{\Gamma \vdash \mutate{x}{M}{N} : \sigma}&\textsc{Mut}\\
+    ~\\
+    \frac{ \Gamma \vdash x : \& \tau \hspace{1em} \Gamma \vdash M : \tau \hspace{1em} \Gamma \vdash N : \sigma }{\Gamma \vdash \mutptr{x}{M}{N} : \sigma }&\textsc{MutPtr}
 \end{align*}
-Note that, for the sake of clarity, we will typically annotate function arguments with their intended types (e.g $\lambda x^\sigma . M$).
+Note that, for the sake of clarity, we will typically annotate function arguments with their intended types (e.g $\lambda x^\sigma . M$), but that these are not a part of our language. In other words, all the type signatures of our language are \textit{inferred}.
 \\~\\
-Observe that the following program (of type $\textbf{Int} \rightarrow \textbf{Int}$) typechecks in this language:
+Observe that the following program $Double : \textbf{Int} \rightarrow \textbf{Int}$ typechecks in this language:
 \begin{align*}
     Double := \lambda x^{\textbf{Int}} ~.~ &\letvar{y}{\mkref x}{}\\  %&\textbf{let}~ y \Leftarrow \mkref x ~\textbf{in}~\\ 
     &\letvar{z}{\mkref x}{}\\
-    &(\deref y) + (\deref z)
+    & \mutptr{y}{ \lambda i^{\textbf{Int}} ~.~ 1 + i }{} \\
+    &\deref y + \deref z
 \end{align*}
 A C analogue of this program would compile without any errors. In Rust, however, this would be flagged by the borrow checker. 
 
-Initially, $y$ and $z$ both \textit{borrow} $x$'s value. Because $y$ and $z$ both both borrow $x$ simultaneously, this borrow must be \textit{immutable}. When $y$ is dereferenced, the value of $x$ is \textit{moved} into $\deref y$,\footnote{We assume that the \textbf{Int} type we are using does not implement the \texttt{Clone} trait, meaning that the \texttt{.clone()} method is not called implicitly here.} meaning that $x$ is no longer owning at that point. Hence, when we try and move $x$ into $z$, the borrow checker complains. 
+Initially, $y$ and $z$ both \textit{borrow} $x$'s value. Because $y$ and $z$ both both borrow $x$ simultaneously, this borrow must be \textit{immutable}.  When $y$ is dereferenced, the value of $x$ is \textit{moved} into $\deref y$,\footnote{We assume that the \textbf{Int} type we are using does not implement the \texttt{Clone} trait, meaning that the \texttt{.clone()} method is not called implicitly here.} meaning that $x$ is no longer owning at that point. Hence, when we try and move $x$ into $z$, the borrow checker complains. 
 
 Our problem is therefore to decide whether or not a program in this language makes the borrow checker complain. Obviously, this is a nebulous question, with a precise definition that we nail down in the next section. In order to do this, we introduce an alternate type system for our language, which enforces that a well-typed program satisfies some of Rust's borrow-checking constraints.
 
 
 \subsection{Semantics}
 
-We now specify semantic rules for our language, sufficient to encapsulate the concept of mutation.
+We now specify big-step semantic rules for our language, sufficient to encapsulate the concepts of mutation and referencing. Note that this is included for the sake of completeness, and is not our principal focus.
 
-We define a heap $H : V \partial $
+We define a heap $H : V \parfun \Omega$ to be a partial function from variables to a set of concrete values $\Omega$, which is defined as follows: 
+\begin{itemize}
+    \item $\Omega$ contains integer literals (i.e. $\mathbb{Z} \subseteq \Omega$)
+    \item $\Omega$ contains any function which has not been applied to all its arguments (i.e. a program $M \in \Omega$ if $M : \tau \rightarrow \sigma$ for any types $\tau$ and $\sigma$).
+    \item All variable are also concrete values (i.e. for any  $x \in V$, $\mkref x \in \Omega$) %For any value $x \in \Omega$, $\mkref x \in \Omega$
+\end{itemize}
+We also define the operation $\overwrite$, which overwrites the value of a variable in the heap: 
+\begin{equation*}
+    H \overwrite x \mapsto v := (H \setminus (\{x\} \times \Omega) ) \cup \{(x, v)\} 
+\end{equation*}
+
+We define a big-step reduction $\red ~\subseteq P \times \Omega$ over our programs $P$ as a set of inference rules. Our judgements are of the form $H \vdash M \red m$, where $H$ is some heap context. 
+\begin{align*}
+    \frac{H(x) = v}{H \vdash x \red v}&\textsc{RedVar}\\
+    ~\\
+    \frac{k \in \mathbb{Z} }{H \vdash k \red k}&\textsc{RedLit}\\
+    ~\\
+    \frac{}{H \vdash \lambda x . M \red \lambda x . M}&\textsc{RedFunc}\\
+    ~\\
+    \frac{H \vdash N \red n \hspace{1em} H \overwrite x \mapsto n \vdash M \red m }{H \vdash (\lambda x . M) \agap N \red m}&\textsc{RedFuncApp}\\
+    ~\\
+    \frac{x \in V}{H \vdash \mkref x \red \mkref x}&\textsc{RedRef}\\
+    ~\\
+    \frac{H \vdash M \red \mkref x \hspace{1em} H(m) = \& n }{ H \vdash \deref M \red n }&\textsc{RedDeref}\\
+    ~\\
+    \frac{H \vdash M \red m \hspace{1em} H \overwrite x \mapsto m \vdash N \red n }{ H \vdash \letvar{x}{M}{N} \red n }&\textsc{RedLet}\\
+    ~\\
+    \frac{H \vdash M \red m \hspace{1em} H \overwrite x \mapsto m \vdash N \red n }{ H \vdash \mutate{x}{M}{N} \red n }&\textsc{RedMut}\\
+    ~\\
+    \frac{H \vdash M \red m \hspace{1em} H(x) = \&y \hspace{1em} H \overwrite y \mapsto m \vdash N \red n }{ H \vdash \mutptr{x}{M}{N} \red n }&\textsc{RedMutPtr}\\
+\end{align*}
 
 \section{Memory-safe Type Systems}
 
@@ -104,13 +144,13 @@ The main issue with systems such as these (for our purposes) is that many of the
 
 
 
-\subsection{Fractional Grades}
+\subsection{Permissions as Fractional Grades}
 
 \subsection{Our System}
 
-Our new memory-safe types are given as follows (where $p \in (0, 1]_{\mathbb{Q}} \cup \{*\}$ is a permission grade):
+Our new memory-safe types are given as follows (where $p \in (0, 1]_{\mathbb{Q}} \cup \{*, l\}$ is a permission):
 \begin{align*}
-    \tau \hspace{0.5em} \sigma ::= \textbf{Unit} ~|~ \textbf{Int} ~|~ \tau \multimap \sigma ~|~ M \otimes N ~|~ \&_p \tau
+    \tau \hspace{0.5em} \sigma ::= \textbf{Unit} ~|~ \textbf{Int} ~|~ \tau \multimap \sigma ~|~ \tau \otimes \sigma ~|~ \&_p \tau
 \end{align*}
 
 We now introduce the following typing rules:
