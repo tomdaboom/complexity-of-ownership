@@ -20,6 +20,8 @@
 \renewcommand\em{\bfseries}
 
 \newcommand{\agap}{\hspace{0.25em}}
+\newcommand{\mkref}{\textbf{ref}~}
+\newcommand{\deref}{\mathbf{*}}
 
 \usepackage[backend=biber]{biblatex}
 \addbibresource{./ref.bib}
@@ -34,8 +36,54 @@
 
 \section{Introduction}
 
-\section{A Simple Language with References}
+\subsection{C to Rust Translation}
 
+\subsection{The Borrow Checker}
 
+\subsection{Problem Statement}
+
+\section{Our Language and Type System(s)}
+
+\subsection{Our C Analogue}
+
+We begin by defining a simple functional language with syntax and typing rules for references and simple data structures. This language is intended to encapsulate C's pointer system, without enforcing any of the memory safety rules enforced by Rust. Later on, we will define an alternate type system for this language which \textit{does} enforce Rust's ownership and borrowing constraints.
+
+Our syntax is given in BNF as follows (where $i \in \mathbb{Z}$, $x \in V$ is a variable, and $f \in F$, where $F$ is some set of \emph{field identifiers}):
+\begin{align*}
+    M \hspace{0.5em} N \hspace{0.5em} \{F_i\}_{i \in [n]} ::=~ &i ~|~ \lambda x . M ~|~ M \agap N ~|~ \textbf{let}~ x \Leftarrow N ~\textbf{in}~ M\\
+    &\mkref M ~|~ \deref M ~|~\\
+    &\textbf{mkStruct} ~\{ f_1 : F_1, \cdots, f_n : F_n \} ~|~ M.f
+\end{align*}
+Those types are given as follows:
+\begin{align*}
+    \tau \hspace{0.5em} \sigma \hspace{0.5em} \{ \gamma_i \}_{i \in [n]} &::=\\ 
+    &\textbf{Int} ~|~ \tau \rightarrow \sigma ~|~ \& \tau ~|~ \textbf{struct} ~\{ f_1 :  \gamma_1, \cdots, f_n : \gamma_n\}
+\end{align*}
+We include a standard set of STLC typing rules, as well as the following rules for references and structs:
+\begin{equation*}
+    \frac{\Gamma \vdash M : \tau}{\Gamma \vdash \mkref M : \& \tau}\textsc{Ref}
+\end{equation*}
+\begin{equation*}
+    \frac{\Gamma \vdash M : \& \tau}{\Gamma \vdash \deref M : \tau}\textsc{Deref}
+\end{equation*}
+\begin{equation*}
+    \frac{\Gamma \vdash F_i : \gamma_i \hspace{1em} \forall i \in [n]}{\Gamma \vdash \textbf{mkStruct} ~\{ f_i : F_i \}_{i \in [n]} : \textbf{struct} ~\{ f_i : \gamma_i \}_{i \in [n]} }\textsc{MkStruct}
+\end{equation*}
+\begin{equation*}
+    \frac{\Gamma \vdash M : \textbf{struct} ~\{ \cdots, f : \gamma, \cdots \}}{\Gamma \vdash M.f : \gamma }\textsc{Index}
+\end{equation*}
+As in C, we define $M \!\! \rightarrow \!\! f := (*M).f$. Also note that, for the sake of clarity, we will typically annotate function arguments with their intended types (e.g $\lambda x^\sigma . M$).
+\\~\\
+Observe that the following program (of type $\textbf{Int} \rightarrow \textbf{Int}$) typechecks in this language:
+\begin{align*}
+    \lambda x^{\textbf{Int}} ~.~ &\textbf{let}~ y \Leftarrow \mkref x ~\textbf{in}~\\ 
+    &\textbf{let}~ z \Leftarrow \mkref x ~\textbf{in}~\\ 
+    &\deref y + \deref z
+\end{align*}
+A C analogue of this function would also compile without any errors. In Rust, however, this would violate memory safety. $y$ and $z$ both \textit{borrow} $x$'s value. Because $y$ and $z$ both both borrow $x$ simultaneously, this borrow must be \textit{immutable}. When $y$ is dereferenced the value of $x$ is \textit{moved} into $\deref y$,\footnote{We assume that the \textbf{Int} type we are using does not implement the \texttt{Clone} trait, meaning that the \texttt{.clone()} method is not called implicitly here.} meaning that $x$ is no longer owning at that point. Hence, when we try and move $x$ into $z$, the borrow checker complains. 
+
+Our problem is therefore to decide whether or not a program in this language makes the borrow checker complain.
+
+\subsection{A Memory-safe Type System}
 
 \end{document}
