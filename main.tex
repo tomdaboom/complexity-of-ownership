@@ -62,14 +62,14 @@ We begin by defining a simple STLC variant with references and mutation. This la
 
 We define a set of programs $P$ and types $T$ using BNF as follows (where $k \in \mathbb{Z}$ is an integer, and $x \in V$ is a variable):
 \begin{align*}
-    P \ni M, N ::=~ &() ~|~ k ~|~ M + N ~|~ \cdots ~|~\\ 
+    P \ni M, N ::=~ &k ~|~ M + N ~|~ \cdots ~|~\\ 
     &\lambda x . M ~|~ M \agap N ~|~ (M, N) ~|~ \textbf{fst}\agap M ~|~ \textbf{snd}\agap M ~|~\\
     &\letvar{x}{M}{N} ~|~\\ 
     &\mutate{x}{M}{N} ~|~ \mutptr{x}{M}{N} ~|~\\
     &\mkref x ~|~ \deref M\\    
     %&\textbf{mkStruct} ~\{ f_1 : F_1, \cdots, f_n : F_n \} ~|~ M.F
     ~\\
-    T \ni \tau, \sigma ::=~ &\textbf{Unit} ~|~ \textbf{Int} ~|~ \tau \rightarrow \sigma ~|~ M \times N ~|~ \& \tau
+    T \ni \tau, \sigma ::=~ &\textbf{Int} ~|~ \tau \rightarrow \sigma ~|~ M \times N ~|~ \& \tau
 \end{align*}
 
 We include a standard set of STLC typing judgements, as well as the following rules for references and type-preserving mutations:
@@ -110,7 +110,7 @@ We define a heap $H : V \parfun \Omega$ to be a partial function from variables 
 \end{itemize}
 We also define the operation $\overwrite$, which overwrites the value of a variable in the heap: 
 \begin{equation*}
-    H \overwrite x \mapsto v := (H \setminus (\{x\} \times \Omega) ) \cup \{(x, v)\} 
+    H \overwrite x \mapsto v := (H \setminus \{x \mapsto z ~|~ z \in \Omega \} ) \cup \{x \mapsto v\} 
 \end{equation*}
 
 We define a big-step reduction $\red ~\subseteq P \times \Omega$ over our programs $P$ as a set of inference rules. Our judgements are of the form $H \vdash M \red m$, where $H$ is some heap context. 
@@ -123,9 +123,9 @@ We define a big-step reduction $\red ~\subseteq P \times \Omega$ over our progra
     ~\\
     \frac{H \vdash N \red n \hspace{1em} H \overwrite x \mapsto n \vdash M \red m }{H \vdash (\lambda x . M) \agap N \red m}&\textsc{RedFuncApp}\\
     ~\\
-    \frac{x \in V}{H \vdash \mkref x \red \mkref x}&\textsc{RedRef}\\
+    \frac{x \in V}{H \vdash \mkref x \red \&x}&\textsc{RedRef}\\
     ~\\
-    \frac{H \vdash M \red \mkref x \hspace{1em} H(m) = \& n }{ H \vdash \deref M \red n }&\textsc{RedDeref}\\
+    \frac{H \vdash M \red m \hspace{1em} H(m) = \& n }{ H \vdash \deref M \red n }&\textsc{RedDeref}\\
     ~\\
     \frac{H \vdash M \red m \hspace{1em} H \overwrite x \mapsto m \vdash N \red n }{ H \vdash \letvar{x}{M}{N} \red n }&\textsc{RedLet}\\
     ~\\
@@ -150,7 +150,7 @@ The main issue with systems such as these (for our purposes) is that many of the
 
 Our new memory-safe types are given as follows (where $p \in (0, 1]_{\mathbb{Q}} \cup \{*, l\}$ is a permission):
 \begin{align*}
-    \tau \hspace{0.5em} \sigma ::= \textbf{Unit} ~|~ \textbf{Int} ~|~ \tau \multimap \sigma ~|~ \tau \otimes \sigma ~|~ \&_p \tau
+    T^* \ni \tau, \sigma ::=  \textbf{Int} ~|~ \tau \multimap \sigma ~|~ \tau \otimes \sigma ~|~ \&_p \tau
 \end{align*}
 
 We now introduce the following typing rules:
