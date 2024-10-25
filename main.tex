@@ -23,7 +23,7 @@
 \newcommand{\mkref}{\textbf{ref}~}
 \newcommand{\deref}{\mathbf{*}}
 
-\usepackage[backend=biber]{biblatex}
+\usepackage[backend=biber, maxnames=10]{biblatex}
 \addbibresource{./ref.bib}
 
 \title{The Ownership Problem}
@@ -38,6 +38,8 @@
 
 \subsection{C to Rust Translation}
 
+\cite{zhang2023crown}
+
 \subsection{The Borrow Checker}
 
 \subsection{Problem Statement}
@@ -46,11 +48,12 @@
 
 \subsection{Our C Analogue}
 
-We begin by defining a simple functional language with syntax and typing rules for references and simple data structures. This language is intended to encapsulate C's pointer system, without enforcing any of the memory safety rules enforced by Rust. Later on, we will define an alternate type system for this language which \textit{does} enforce Rust's ownership and borrowing constraints.
+We begin by defining a simple STLC variant with references and simple data structures. This language is intended to encapsulate C's pointer system, without enforcing any of the memory safety rules enforced by Rust. Later on, we will define an alternate type system for this language which \textit{does} enforce Rust's ownership and borrowing constraints.
 
-Our syntax is given in BNF as follows (where $i \in \mathbb{Z}$, $x \in V$ is a variable, and $f \in F$, where $F$ is some set of \emph{field identifiers}):
+Our syntax is given in BNF as follows (where $k \in \mathbb{Z}$ is an integer, and $x \in V$ is a variable, and $f_i \in \mathcal{F} \forall i \in [n]$, where $\mathcal{F}$ is some set of \emph{field identifiers}):
 \begin{align*}
-    M \hspace{0.5em} N \hspace{0.5em} \{F_i\}_{i \in [n]} ::=~ &i ~|~ \lambda x . M ~|~ M \agap N ~|~ \textbf{let}~ x \Leftarrow N ~\textbf{in}~ M\\
+    M \hspace{0.5em} N \hspace{0.5em} \{F_i\}_{i \in [n]} ::=~ &k ~|~ M + N ~|~ M \times N ~|~ \cdots ~|~\\ 
+    &\lambda x . M ~|~ M \agap N ~|~ \textbf{let}~ x \Leftarrow N ~\textbf{in}~ M\\
     &\mkref M ~|~ \deref M ~|~\\
     &\textbf{mkStruct} ~\{ f_1 : F_1, \cdots, f_n : F_n \} ~|~ M.f
 \end{align*}
@@ -76,14 +79,20 @@ As in C, we define $M \!\! \rightarrow \!\! f := (*M).f$. Also note that, for th
 \\~\\
 Observe that the following program (of type $\textbf{Int} \rightarrow \textbf{Int}$) typechecks in this language:
 \begin{align*}
-    \lambda x^{\textbf{Int}} ~.~ &\textbf{let}~ y \Leftarrow \mkref x ~\textbf{in}~\\ 
+    Double := \lambda x^{\textbf{Int}} ~.~ &\textbf{let}~ y \Leftarrow \mkref x ~\textbf{in}~\\ 
     &\textbf{let}~ z \Leftarrow \mkref x ~\textbf{in}~\\ 
     &\deref y + \deref z
 \end{align*}
-A C analogue of this function would also compile without any errors. In Rust, however, this would violate memory safety. $y$ and $z$ both \textit{borrow} $x$'s value. Because $y$ and $z$ both both borrow $x$ simultaneously, this borrow must be \textit{immutable}. When $y$ is dereferenced the value of $x$ is \textit{moved} into $\deref y$,\footnote{We assume that the \textbf{Int} type we are using does not implement the \texttt{Clone} trait, meaning that the \texttt{.clone()} method is not called implicitly here.} meaning that $x$ is no longer owning at that point. Hence, when we try and move $x$ into $z$, the borrow checker complains. 
+A C analogue of this program would compile without any errors. In Rust, however, this would be flagged by the borrow checker. 
 
-Our problem is therefore to decide whether or not a program in this language makes the borrow checker complain.
+Initially, $y$ and $z$ both \textit{borrow} $x$'s value. Because $y$ and $z$ both both borrow $x$ simultaneously, this borrow must be \textit{immutable}. When $y$ is dereferenced, the value of $x$ is \textit{moved} into $\deref y$,\footnote{We assume that the \textbf{Int} type we are using does not implement the \texttt{Clone} trait, meaning that the \texttt{.clone()} method is not called implicitly here.} meaning that $x$ is no longer owning at that point. Hence, when we try and move $x$ into $z$, the borrow checker complains. 
+
+Our problem is therefore to decide whether or not a program in this language makes the borrow checker complain. Obviously, this is a nebulous question, with a precise definition that is difficult to nail down. In order to do this, we introduce an alternate type system for our language, which enforces that a well-typed program satisfies some of Rust's borrow-checking constraints.
 
 \subsection{A Memory-safe Type System}
+
+
+\renewcommand\em{\it}
+\printbibliography[title={References}]
 
 \end{document}
