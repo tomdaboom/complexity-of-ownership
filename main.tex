@@ -21,7 +21,10 @@
 
 \newcommand{\agap}{\hspace{0.25em}}
 \newcommand{\mkref}{\textbf{ref}~}
-\newcommand{\deref}{\mathbf{*}}
+\newcommand{\deref}{\textbf{deref}~}%{\mathbf{*}}
+\newcommand{\mutate}[3]{\textbf{mut}~ #1 \Rightarrow #2 ~\textbf{then}~ #3}
+\newcommand{\letvar}[3]{\textbf{let}~ #1 \Leftarrow #2 ~\textbf{then}~ #3}
+
 
 \usepackage[backend=biber, maxnames=10]{biblatex}
 \addbibresource{./ref.bib}
@@ -44,52 +47,73 @@
 
 \subsection{Problem Statement}
 
-\section{Our Language and Type System(s)}
+\section{A Language with Pointers and Mutation}
 
-\subsection{Our C Analogue}
+\subsection{Syntax and Types}
 
-We begin by defining a simple STLC variant with references and simple data structures. This language is intended to encapsulate C's pointer system, without enforcing any of the memory safety rules enforced by Rust. Later on, we will define an alternate type system for this language which \textit{does} enforce Rust's ownership and borrowing constraints.
+We begin by defining a simple STLC variant with references and mutation. This language is intended to encapsulate C's pointer system, without enforcing any of the memory safety rules enforced by Rust. Later on, we will define an alternate type system for this language which \textit{does} enforce Rust's ownership and borrowing constraints.
 
-Our syntax is given in BNF as follows (where $k \in \mathbb{Z}$ is an integer, and $x \in V$ is a variable, and $f_i \in \mathcal{F} \forall i \in [n]$, where $\mathcal{F}$ is some set of \emph{field identifiers}):
+Our syntax and types are given in BNF as follows (where $k \in \mathbb{Z}$ is an integer, and $x \in V$ is a variable):
 \begin{align*}
-    M \hspace{0.5em} N \hspace{0.5em} \{F_i\}_{i \in [n]} ::=~ &k ~|~ M + N ~|~ M \times N ~|~ \cdots ~|~\\ 
-    &\lambda x . M ~|~ M \agap N ~|~ \textbf{let}~ x \Leftarrow N ~\textbf{in}~ M\\
-    &\mkref M ~|~ \deref M ~|~\\
-    &\textbf{mkStruct} ~\{ f_1 : F_1, \cdots, f_n : F_n \} ~|~ M.f
+    M \hspace{0.5em} N ::=~ &() ~|~ k ~|~ M + N ~|~ \cdots ~|~\\ 
+    &\lambda x . M ~|~ M \agap N ~|~ (M, N) ~|~\\
+    &\letvar{x}{M}{N} ~|~\\ 
+    &\mutate{x}{M}{N} ~|~\\
+    &\mkref M ~|~ \deref M\\    
+    %&\textbf{mkStruct} ~\{ f_1 : F_1, \cdots, f_n : F_n \} ~|~ M.F
+    ~\\
+    \tau \hspace{0.5em} \sigma ::=~ &\textbf{Unit} ~|~ \textbf{Int} ~|~ \tau \rightarrow \sigma ~|~ M \times N ~|~ \& \tau
 \end{align*}
-Those types are given as follows:
+
+We include a standard set of STLC typing judgements, as well as the following rules for references and mutation:
 \begin{align*}
-    \tau \hspace{0.5em} \sigma \hspace{0.5em} \{ \gamma_i \}_{i \in [n]} &::=\\ 
-    &\textbf{Int} ~|~ \tau \rightarrow \sigma ~|~ \& \tau ~|~ \textbf{struct} ~\{ f_1 :  \gamma_1, \cdots, f_n : \gamma_n\}
+    \frac{\Gamma \vdash M : \tau}{\Gamma \vdash \mkref M : \& \tau}&\textsc{Ref}\\
+    ~\\
+    \frac{\Gamma \vdash M : \& \tau}{\Gamma \vdash \deref M : \tau}&\textsc{Deref}\\
+    ~\\
+    \frac{x : \tau \in \Gamma \hspace{1em} \Gamma \vdash M : \tau \rightarrow \tau \hspace{1em} \Gamma \vdash N : \sigma }{\Gamma \vdash \mutate{x}{M}{N} : \sigma}&\textsc{Mutate}\\
 \end{align*}
-We include a standard set of STLC typing rules, as well as the following rules for references and structs:
-\begin{equation*}
-    \frac{\Gamma \vdash M : \tau}{\Gamma \vdash \mkref M : \& \tau}\textsc{Ref}
-\end{equation*}
-\begin{equation*}
-    \frac{\Gamma \vdash M : \& \tau}{\Gamma \vdash \deref M : \tau}\textsc{Deref}
-\end{equation*}
-\begin{equation*}
-    \frac{\Gamma \vdash F_i : \gamma_i \hspace{1em} \forall i \in [n]}{\Gamma \vdash \textbf{mkStruct} ~\{ f_i : F_i \}_{i \in [n]} : \textbf{struct} ~\{ f_i : \gamma_i \}_{i \in [n]} }\textsc{MkStruct}
-\end{equation*}
-\begin{equation*}
-    \frac{\Gamma \vdash M : \textbf{struct} ~\{ \cdots, f : \gamma, \cdots \}}{\Gamma \vdash M.f : \gamma }\textsc{Index}
-\end{equation*}
-As in C, we define $M \!\! \rightarrow \!\! f := (*M).f$. Also note that, for the sake of clarity, we will typically annotate function arguments with their intended types (e.g $\lambda x^\sigma . M$).
+Note that, for the sake of clarity, we will typically annotate function arguments with their intended types (e.g $\lambda x^\sigma . M$).
 \\~\\
 Observe that the following program (of type $\textbf{Int} \rightarrow \textbf{Int}$) typechecks in this language:
 \begin{align*}
-    Double := \lambda x^{\textbf{Int}} ~.~ &\textbf{let}~ y \Leftarrow \mkref x ~\textbf{in}~\\ 
-    &\textbf{let}~ z \Leftarrow \mkref x ~\textbf{in}~\\ 
-    &\deref y + \deref z
+    Double := \lambda x^{\textbf{Int}} ~.~ &\letvar{y}{\mkref x}{}\\  %&\textbf{let}~ y \Leftarrow \mkref x ~\textbf{in}~\\ 
+    &\letvar{z}{\mkref x}{}\\
+    &(\deref y) + (\deref z)
 \end{align*}
 A C analogue of this program would compile without any errors. In Rust, however, this would be flagged by the borrow checker. 
 
 Initially, $y$ and $z$ both \textit{borrow} $x$'s value. Because $y$ and $z$ both both borrow $x$ simultaneously, this borrow must be \textit{immutable}. When $y$ is dereferenced, the value of $x$ is \textit{moved} into $\deref y$,\footnote{We assume that the \textbf{Int} type we are using does not implement the \texttt{Clone} trait, meaning that the \texttt{.clone()} method is not called implicitly here.} meaning that $x$ is no longer owning at that point. Hence, when we try and move $x$ into $z$, the borrow checker complains. 
 
-Our problem is therefore to decide whether or not a program in this language makes the borrow checker complain. Obviously, this is a nebulous question, with a precise definition that is difficult to nail down. In order to do this, we introduce an alternate type system for our language, which enforces that a well-typed program satisfies some of Rust's borrow-checking constraints.
+Our problem is therefore to decide whether or not a program in this language makes the borrow checker complain. Obviously, this is a nebulous question, with a precise definition that we nail down in the next section. In order to do this, we introduce an alternate type system for our language, which enforces that a well-typed program satisfies some of Rust's borrow-checking constraints.
 
-\subsection{A Memory-safe Type System}
+
+\subsection{Semantics}
+
+We now specify semantic rules for our language, sufficient to encapsulate the concept of mutation.
+
+We define a heap $H : V \partial $
+
+\section{Memory-safe Type Systems}
+
+Plenty of literature exists on type systems that meaningfully abstract the notions of ownership and borrowing present in Rust \cite{marshall2022entente, marshall2024fracunique}, which we take inspiration from. 
+
+%paragraphs about linearity and uniqueness
+
+The main issue with systems such as these (for our purposes) is that many of the decisions regarding ownership and borrowing are specified by the programmer at the syntactic level. In our context, we need these to be specified by the transpiler by encoding them solely at the type level. 
+
+
+
+\subsection{Fractional Grades}
+
+\subsection{Our System}
+
+Our new memory-safe types are given as follows (where $p \in (0, 1]_{\mathbb{Q}} \cup \{*\}$ is a permission grade):
+\begin{align*}
+    \tau \hspace{0.5em} \sigma ::= \textbf{Unit} ~|~ \textbf{Int} ~|~ \tau \multimap \sigma ~|~ M \otimes N ~|~ \&_p \tau
+\end{align*}
+
+We now introduce the following typing rules:
 
 
 \renewcommand\em{\it}
