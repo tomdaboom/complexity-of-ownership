@@ -29,7 +29,6 @@
 \newcommand{\parfun}{\rightharpoonup}
 \newcommand{\red}{\leadsto}
 \newcommand{\bvdash}{\mathbin{\rotatebox[origin=c]{180}{$\vdash$}}}
-\newcommand{\overwrite}{\triangleright}
 \newcommand{\lolly}{\multimap}
 \newcommand{\judge}[3]{\textsc{#1}&\frac{#2}{#3}}
 
@@ -110,9 +109,9 @@ We define a heap $H : V \parfun \Omega$ to be a partial function from variables 
     \item $\Omega$ contains any function which has not been applied to all its arguments (i.e. a program $M \in \Omega$ if $M : \tau \rightarrow \sigma$ for any types $\tau$ and $\sigma$).
     \item All variable are also concrete values (i.e. for any  $x \in V$, $\mkref x \in \Omega$) %For any value $x \in \Omega$, $\mkref x \in \Omega$
 \end{itemize}
-We also define the operation $\overwrite$, which overwrites the value of a variable in the heap: 
+We also define the following operation, which overwrites the value of a variable in the heap: 
 \begin{equation*}
-    H \overwrite x \mapsto v := (H \setminus \{x \mapsto z ~|~ z \in \Omega \} ) \cup \{x \mapsto v\} 
+    H [x \mapsto v] := (H \setminus \{x \mapsto z ~|~ z \in \Omega \} ) \cup \{x \mapsto v\} 
 \end{equation*}
 
 We define a big-step reduction $\red ~\subseteq P \times \Omega$ over our programs $P$ as a set of inference rules. Our judgements are of the form $H \vdash M \red m$, where $H$ is some heap context. 
@@ -123,17 +122,17 @@ We define a big-step reduction $\red ~\subseteq P \times \Omega$ over our progra
     ~\\
     \judge{RedFunc}{}{H \vdash \lambda x . M \red \lambda x . M}\\
     ~\\
-    \judge{RedFuncApp}{H \vdash N \red n \hspace{1em} H \overwrite x \mapsto n \vdash M \red m }{H \vdash (\lambda x . M) \agap N \red m}\\
+    \judge{RedFuncApp}{H \vdash N \red n \hspace{1em} H[x \mapsto n] \vdash M \red m }{H \vdash (\lambda x . M) \agap N \red m}\\
     ~\\
     \judge{RedRef}{x \in V}{H \vdash \mkref x \red \&x}\\
     ~\\
     \judge{RedDeref}{H \vdash M \red m \hspace{1em} H(m) = \& n }{ H \vdash \deref M \red n }\\
     ~\\
-    \judge{RedLet}{H \vdash M \red m \hspace{1em} H \overwrite x \mapsto m \vdash N \red n }{ H \vdash \letvar{x}{M}{N} \red n }\\
+    \judge{RedLet}{H \vdash M \red m \hspace{1em} H[x \mapsto m] \vdash N \red n }{ H \vdash \letvar{x}{M}{N} \red n }\\
     ~\\
-    \judge{RedMut}{H \vdash M \agap x \red m \hspace{1em} H \overwrite x \mapsto m \vdash N \red n }{ H \vdash \mutate{x}{M}{N} \red n }\\
+    \judge{RedMut}{H \vdash M \agap x \red m \hspace{1em} H [x \mapsto m] \vdash N \red n }{ H \vdash \mutate{x}{M}{N} \red n }\\
     ~\\
-    \judge{RedMutPtr}{ H(x) = \&y \hspace{1em} H \vdash M y \red m \hspace{1em}  H \overwrite y \mapsto m \vdash N \red n }{ H \vdash \mutptr{x}{M}{N} \red n }\\
+    \judge{RedMutPtr}{ H(x) = \&y \hspace{1em} H \vdash M y \red m \hspace{1em}  H [y \mapsto m] \vdash N \red n }{ H \vdash \mutptr{x}{M}{N} \red n }\\
     ~\\
 \end{align*}
 
