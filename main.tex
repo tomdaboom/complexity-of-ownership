@@ -161,9 +161,10 @@ We now introduce the following typing rules (written $\Gamma \vdash_\Sigma M : \
     \judge{LinFuncApp}{\Gamma_1 \vdash_\Sigma M : \tau \lolly \sigma \hspace{1em} \Gamma_2 \vdash_\Sigma N : \tau}{\Gamma_1 + \Gamma_2 \vdash_\Sigma M N : \sigma}\\
     ~\\
     \judge{FracRef}{x : \tau \in \Gamma \hspace{1em} 1 > \sum\limits_{\&_q^x \tau \in \Gamma} q =: r \hspace{1em} p \in (0, 1-r]}{\Gamma \vdash_\Sigma \mkref x : \&^x_p \tau}\\
-    ~\\
-    \judge{}{}{}
 \end{align*}
+
+
+
 
 
 
