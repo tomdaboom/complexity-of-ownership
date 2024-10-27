@@ -22,14 +22,16 @@
 \newcommand{\agap}{\hspace{0.25em}}
 \newcommand{\mkref}{\textbf{ref}~}
 \newcommand{\deref}{\textbf{deref}~}%{\mathbf{*}}
-\newcommand{\mutate}[3]{\textbf{mut}~ #1 \Leftarrow #2 ~\textbf{then}~ #3}
-\newcommand{\mutptr}[3]{\textbf{mutAt}~ #1 \Leftarrow #2 ~\textbf{then}~ #3}
+\newcommand{\mutate}[3]{\textbf{mut}~ #1 \Rightarrow #2 ~\textbf{then}~ #3}
+\newcommand{\mutptr}[3]{\textbf{mutAt}~ #1 \Rightarrow #2 ~\textbf{then}~ #3}
 
 \newcommand{\letvar}[3]{\textbf{let}~ #1 \Leftarrow #2 ~\textbf{then}~ #3}
 \newcommand{\parfun}{\rightharpoonup}
 \newcommand{\red}{\leadsto}
 \newcommand{\bvdash}{\mathbin{\rotatebox[origin=c]{180}{$\vdash$}}}
 \newcommand{\overwrite}{\triangleright}
+\newcommand{\lolly}{\multimap}
+\newcommand{\judge}[3]{\textsc{#1}&\frac{#2}{#3}}
 
 
 \usepackage[backend=biber, maxnames=10]{biblatex}
@@ -74,26 +76,26 @@ We define a set of programs $P$ and types $T$ using BNF as follows (where $k \in
 
 We include a standard set of STLC typing judgements, as well as the following rules for references and type-preserving mutations:
 \begin{align*}
-    \frac{x : \tau \in \Gamma}{\Gamma \vdash \mkref x : \& \tau}&\textsc{Ref}\\
+    \judge{Ref}{x : \tau \in \Gamma}{\Gamma \vdash \mkref x : \& \tau}\\
     ~\\
-    \frac{\Gamma \vdash M : \& \tau}{\Gamma \vdash \deref M : \tau}&\textsc{Deref}\\
+    \judge{Deref}{\Gamma \vdash M : \& \tau}{\Gamma \vdash \deref M : \tau}\\
     ~\\
-    \frac{x : \tau \in \Gamma \hspace{1em} \Gamma \vdash M : \tau \hspace{1em} \Gamma \vdash N : \sigma }{\Gamma \vdash \mutate{x}{M}{N} : \sigma}&\textsc{Mut}\\
+    \judge{Mut}{x : \tau \in \Gamma \hspace{1em} \Gamma \vdash M : \tau \rightarrow \tau \hspace{1em} \Gamma \vdash N : \sigma }{\Gamma \vdash \mutate{x}{M}{N} : \sigma}\\
     ~\\
-    \frac{ \Gamma \vdash x : \& \tau \hspace{1em} \Gamma \vdash M : \tau \hspace{1em} \Gamma \vdash N : \sigma }{\Gamma \vdash \mutptr{x}{M}{N} : \sigma }&\textsc{MutPtr}
+    \judge{MutAt}{ \Gamma \vdash x : \& \tau \hspace{1em} \Gamma \vdash M : \tau \rightarrow \tau \hspace{1em} \Gamma \vdash N : \sigma }{\Gamma \vdash \mutptr{x}{M}{N} : \sigma }
 \end{align*}
 Note that, for the sake of clarity, we will typically annotate function arguments with their intended types (e.g $\lambda x^\sigma . M$), but that these are not a part of our language. In other words, all the type signatures of our language are \textit{inferred}.
 \\~\\
-Observe that the following program $Double : \textbf{Int} \rightarrow \textbf{Int}$ typechecks in this language:
+Observe that the following program $Triple : \textbf{Int} \rightarrow \textbf{Int}$ typechecks in this language:
 \begin{align*}
-    Double := \lambda x^{\textbf{Int}} ~.~ &\letvar{y}{\mkref x}{}\\  %&\textbf{let}~ y \Leftarrow \mkref x ~\textbf{in}~\\ 
+    Triple := \lambda x^{\textbf{Int}} ~.~ &\letvar{y}{\mkref x}{}\\  %&\textbf{let}~ y \Leftarrow \mkref x ~\textbf{in}~\\ 
     &\letvar{z}{\mkref x}{}\\
-    & \mutptr{y}{ \lambda i^{\textbf{Int}} ~.~ 1 + i }{} \\
+    & \mutptr{y}{ \lambda i^{\textbf{Int}} ~.~ i + i }{} \\
     &\deref y + \deref z
 \end{align*}
-A C analogue of this program would compile without any errors. In Rust, however, this would be flagged by the borrow checker. 
+A C analogue of this program would compile without any errors. In Rust, however, the borrow checker complains about two problems that violate memory safety. 
 
-Initially, $y$ and $z$ both \textit{borrow} $x$'s value. Because $y$ and $z$ both both borrow $x$ simultaneously, this borrow must be \textit{immutable}.  When $y$ is dereferenced, the value of $x$ is \textit{moved} into $\deref y$,\footnote{We assume that the \textbf{Int} type we are using does not implement the \texttt{Clone} trait, meaning that the \texttt{.clone()} method is not called implicitly here.} meaning that $x$ is no longer owning at that point. Hence, when we try and move $x$ into $z$, the borrow checker complains. 
+Initially, $y$ and $z$ both \textit{borrow} $x$'s value. Because $y$ and $z$ both both borrow $x$ simultaneously, this borrow must be \textit{immutable}. The first issue follows: Rust complains when the value pointed to by $y$ is mutated. The second issue concerns $y$'s dereference: when $y$ is dereferenced, the value of $x$ is \textit{moved} into $\deref y$,\footnote{We assume that the \textbf{Int} type we are using does not implement the \texttt{Clone} trait, meaning that the \texttt{.clone()} method is not called implicitly here.} meaning that $x$ is no longer owning at that point. Hence, the borrow checker complains when we try and move $x$ when $z$ is dereferenced. 
 
 Our problem is therefore to decide whether or not a program in this language makes the borrow checker complain. Obviously, this is a nebulous question, with a precise definition that we nail down in the next section. In order to do this, we introduce an alternate type system for our language, which enforces that a well-typed program satisfies some of Rust's borrow-checking constraints.
 
@@ -115,23 +117,24 @@ We also define the operation $\overwrite$, which overwrites the value of a varia
 
 We define a big-step reduction $\red ~\subseteq P \times \Omega$ over our programs $P$ as a set of inference rules. Our judgements are of the form $H \vdash M \red m$, where $H$ is some heap context. 
 \begin{align*}
-    \frac{H(x) = v}{H \vdash x \red v}&\textsc{RedVar}\\
+    \judge{RedVar}{H(x) = v}{H \vdash x \red v }\\
     ~\\
-    \frac{k \in \mathbb{Z} }{H \vdash k \red k}&\textsc{RedLit}\\
+    \judge{RedLit}{k \in \mathbb{Z} }{H \vdash k \red k}\\
     ~\\
-    \frac{}{H \vdash \lambda x . M \red \lambda x . M}&\textsc{RedFunc}\\
+    \judge{RedFunc}{}{H \vdash \lambda x . M \red \lambda x . M}\\
     ~\\
-    \frac{H \vdash N \red n \hspace{1em} H \overwrite x \mapsto n \vdash M \red m }{H \vdash (\lambda x . M) \agap N \red m}&\textsc{RedFuncApp}\\
+    \judge{RedFuncApp}{H \vdash N \red n \hspace{1em} H \overwrite x \mapsto n \vdash M \red m }{H \vdash (\lambda x . M) \agap N \red m}\\
     ~\\
-    \frac{x \in V}{H \vdash \mkref x \red \&x}&\textsc{RedRef}\\
+    \judge{RedRef}{x \in V}{H \vdash \mkref x \red \&x}\\
     ~\\
-    \frac{H \vdash M \red m \hspace{1em} H(m) = \& n }{ H \vdash \deref M \red n }&\textsc{RedDeref}\\
+    \judge{RedDeref}{H \vdash M \red m \hspace{1em} H(m) = \& n }{ H \vdash \deref M \red n }\\
     ~\\
-    \frac{H \vdash M \red m \hspace{1em} H \overwrite x \mapsto m \vdash N \red n }{ H \vdash \letvar{x}{M}{N} \red n }&\textsc{RedLet}\\
+    \judge{RedLet}{H \vdash M \red m \hspace{1em} H \overwrite x \mapsto m \vdash N \red n }{ H \vdash \letvar{x}{M}{N} \red n }\\
     ~\\
-    \frac{H \vdash M \red m \hspace{1em} H \overwrite x \mapsto m \vdash N \red n }{ H \vdash \mutate{x}{M}{N} \red n }&\textsc{RedMut}\\
+    \judge{RedMut}{H \vdash M \agap x \red m \hspace{1em} H \overwrite x \mapsto m \vdash N \red n }{ H \vdash \mutate{x}{M}{N} \red n }\\
     ~\\
-    \frac{H \vdash M \red m \hspace{1em} H(x) = \&y \hspace{1em} H \overwrite y \mapsto m \vdash N \red n }{ H \vdash \mutptr{x}{M}{N} \red n }&\textsc{RedMutPtr}\\
+    \judge{RedMutPtr}{ H(x) = \&y \hspace{1em} H \vdash M y \red m \hspace{1em}  H \overwrite y \mapsto m \vdash N \red n }{ H \vdash \mutptr{x}{M}{N} \red n }\\
+    ~\\
 \end{align*}
 
 \section{Memory-safe Type Systems}
@@ -148,12 +151,21 @@ The main issue with systems such as these (for our purposes) is that many of the
 
 \subsection{Our System}
 
-Our new memory-safe types are given as follows (where $p \in (0, 1]_{\mathbb{Q}} \cup \{*, l\}$ is a permission):
+Our new memory-safe, \textit{linear graded} types are given as follows (where $p \in \mathbb{P}, \mathbb{P} := (0, 1]_{\mathbb{Q}} \cup \{*\}$ is a permission and $x \in V$ is some variable):
 \begin{align*}
-    T^* \ni \tau, \sigma ::=  \textbf{Int} ~|~ \tau \multimap \sigma ~|~ \tau \otimes \sigma ~|~ \&_p \tau
+    T_\Sigma \ni \tau, \sigma ::=  \textbf{Int} ~|~ \tau \lolly \sigma ~|~ \tau \otimes \sigma ~|~ \&_p^x \tau 
+\end{align*}
+We now introduce the following typing rules (written $\Gamma \vdash_\Sigma M : \tau$ to distinguish them from our unsafe type system):
+\begin{align*}
+    \judge{LinFunc}{\Gamma, x : \tau \vdash_\Sigma M : \sigma}{ \Gamma \vdash_\Sigma \lambda x . M : \tau \lolly \sigma}\\
+    ~\\
+    \judge{LinFuncApp}{\Gamma_1 \vdash_\Sigma M : \tau \lolly \sigma \hspace{1em} \Gamma_2 \vdash_\Sigma N : \tau}{\Gamma_1 + \Gamma_2 \vdash_\Sigma M N : \sigma}\\
+    ~\\
+    \judge{FracRef}{x : \tau \in \Gamma \hspace{1em} 1 > \sum\limits_{\&_q^x \tau \in \Gamma} q =: r \hspace{1em} p \in (0, 1-r]}{\Gamma \vdash_\Sigma \mkref x : \&^x_p \tau}\\
+    ~\\
+    \judge{}{}{}
 \end{align*}
 
-We now introduce the following typing rules:
 
 
 \renewcommand\em{\it}
