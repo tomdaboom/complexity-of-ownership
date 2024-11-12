@@ -22,6 +22,7 @@
 \newcommand{\agap}{\hspace{0.25em}}
 \newcommand{\mkref}{\textbf{ref}~}
 \newcommand{\deref}{\textbf{deref}~}%{\mathbf{*}}
+\newcommand{\drfStar}{*\hspace{0.07em}}
 \newcommand{\mutate}[3]{\textbf{mut}~ #1 \Rightarrow #2 ~\textbf{then}~ #3}
 \newcommand{\mutptr}[3]{\textbf{mutAt}~ #1 \Rightarrow #2 ~\textbf{then}~ #3}
 
@@ -56,41 +57,22 @@
 
 \section{A Language with Pointers and Mutation}
 
-We begin by defining a simple STLC variant with references and mutation. This language is intended to encapsulate C's pointer system, without enforcing any of the memory safety rules enforced by Rust. Later on, we will define an alternate type system for this language which \textit{does} enforce Rust's ownership and borrowing constraints.
-
+We begin by defining a simple imperative language with references. This language is intended to encapsulate C's pointer system, without enforcing any of the memory safety rules enforced by Rust. Later on, we will define an alternate type system for this language which \textit{does} enforce Rust's ownership and borrowing constraints.
 
 \subsection{Syntax and Types}
 
-We define a set of programs $P$ and types $T$ using BNF as follows (where $k \in \mathbb{Z}$ is an integer, and $x \in V$ is a variable):
+We define our access paths, types and programs as follows (assuming the existence of some infinite set of variable identifiers $V$):
 \begin{align*}
-    P \ni M, N ::=~ &k ~|~ M + N ~|~ \cdots ~|~\\ 
-    &\lambda x . M ~|~ M \agap N ~|~ (M, N) ~|~ \textbf{fst}\agap M ~|~ \textbf{snd}\agap M ~|~\\
-    &\letvar{x}{M}{N} ~|~\\ 
-    &\mutate{x}{M}{N} ~|~ \mutptr{x}{M}{N} ~|~\\
-    &\mkref x ~|~ \deref M\\    
-    %&\textbf{mkStruct} ~\{ f_1 : F_1, \cdots, f_n : F_n \} ~|~ M.F
+    P ::=~ &x \in V ~|~ \drfStar \! P ~|~ P.\textbf{fst} ~|~ P.\textbf{snd}\\
     ~\\
-    T \ni \tau, \sigma ::=~ &\textbf{Int} ~|~ \tau \rightarrow \sigma ~|~ M \times N ~|~ \& \tau
+    \tau, \sigma ::=~ &\textbf{Int} ~|~ \tau \times \sigma ~|~ \tau \rightarrow \sigma
+    ~\\
+    M ::= &
 \end{align*}
 
-We include a standard set of STLC typing judgements, as well as the following rules for references and type-preserving mutations:
+Observe that the following program typechecks in this language:
 \begin{align*}
-    \judge{Ref}{x : \tau \in \Gamma}{\Gamma \vdash \mkref x : \& \tau}\\
-    ~\\
-    \judge{Deref}{\Gamma \vdash M : \& \tau}{\Gamma \vdash \deref M : \tau}\\
-    ~\\
-    \judge{Mut}{x : \tau \in \Gamma \hspace{1em} \Gamma \vdash M : \tau \rightarrow \tau \hspace{1em} \Gamma \vdash N : \sigma }{\Gamma \vdash \mutate{x}{M}{N} : \sigma}\\
-    ~\\
-    \judge{MutAt}{ \Gamma \vdash x : \& \tau \hspace{1em} \Gamma \vdash M : \tau \rightarrow \tau \hspace{1em} \Gamma \vdash N : \sigma }{\Gamma \vdash \mutptr{x}{M}{N} : \sigma }
-\end{align*}
-Note that, for the sake of clarity, we will typically annotate function arguments with their intended types (e.g $\lambda x^\sigma . M$), but that these are not a part of our language. In other words, all the type signatures of our language are \textit{inferred}.
-\\~\\
-Observe that the following program $Triple : \textbf{Int} \rightarrow \textbf{Int}$ typechecks in this language:
-\begin{align*}
-    Triple := \lambda x^{\textbf{Int}} ~.~ &\letvar{y}{\mkref x}{}\\  %&\textbf{let}~ y \Leftarrow \mkref x ~\textbf{in}~\\ 
-    &\letvar{z}{\mkref x}{}\\
-    & \mutptr{y}{ \lambda i^{\textbf{Int}} ~.~ i + i }{} \\
-    &\deref y + \deref z
+    =
 \end{align*}
 A C analogue of this program would compile without any errors. In Rust, however, the borrow checker complains about two problems that violate memory safety. 
 
@@ -101,67 +83,15 @@ Our problem is therefore to decide whether or not a program in this language mak
 
 \subsection{Semantics}
 
-We now specify big-step semantic rules for our language, sufficient to encapsulate the concepts of mutation and referencing. Note that this is included for the sake of completeness, and is not our principal focus.
 
-We define a heap $H : V \parfun \Omega$ to be a partial function from variables to a set of concrete values $\Omega$, which is defined as follows: 
-\begin{itemize}
-    \item $\Omega$ contains integer literals (i.e. $\mathbb{Z} \subseteq \Omega$)
-    \item $\Omega$ contains any function which has not been applied to all its arguments (i.e. a program $M \in \Omega$ if $M : \tau \rightarrow \sigma$ for any types $\tau$ and $\sigma$).
-    \item All variable are also concrete values (i.e. for any  $x \in V$, $\mkref x \in \Omega$) %For any value $x \in \Omega$, $\mkref x \in \Omega$
-\end{itemize}
-We also define the following operation, which overwrites the value of a variable in the heap: 
-\begin{equation*}
-    H [x \mapsto v] := (H \setminus \{x \mapsto z ~|~ z \in \Omega \} ) \cup \{x \mapsto v\} 
-\end{equation*}
-
-We define a big-step reduction $\red ~\subseteq P \times \Omega$ over our programs $P$ as a set of inference rules. Our judgements are of the form $H \vdash M \red m$, where $H$ is some heap context. 
-\begin{align*}
-    \judge{RedVar}{H(x) = v}{H \vdash x \red v }\\
-    ~\\
-    \judge{RedLit}{k \in \mathbb{Z} }{H \vdash k \red k}\\
-    ~\\
-    \judge{RedFunc}{}{H \vdash \lambda x . M \red \lambda x . M}\\
-    ~\\
-    \judge{RedFuncApp}{H \vdash N \red n \hspace{1em} H[x \mapsto n] \vdash M \red m }{H \vdash (\lambda x . M) \agap N \red m}\\
-    ~\\
-    \judge{RedRef}{x \in V}{H \vdash \mkref x \red \&x}\\
-    ~\\
-    \judge{RedDeref}{H \vdash M \red m \hspace{1em} H(m) = \& n }{ H \vdash \deref M \red n }\\
-    ~\\
-    \judge{RedLet}{H \vdash M \red m \hspace{1em} H[x \mapsto m] \vdash N \red n }{ H \vdash \letvar{x}{M}{N} \red n }\\
-    ~\\
-    \judge{RedMut}{H \vdash M \agap x \red m \hspace{1em} H [x \mapsto m] \vdash N \red n }{ H \vdash \mutate{x}{M}{N} \red n }\\
-    ~\\
-    \judge{RedMutPtr}{ H(x) = \&y \hspace{1em} H \vdash M y \red m \hspace{1em}  H [y \mapsto m] \vdash N \red n }{ H \vdash \mutptr{x}{M}{N} \red n }\\
-    ~\\
-\end{align*}
 
 \section{Memory-safe Type Systems}
-
-Plenty of literature exists on type systems that meaningfully abstract the notions of ownership and borrowing present in Rust \cite{marshall2022entente, marshall2024fracunique}, which we take inspiration from. 
-
-%paragraphs about linearity and uniqueness
-
-The main issue with systems such as these (for our purposes) is that many of the decisions regarding ownership and borrowing are specified by the programmer at the syntactic level. In our context, we need these to be specified by the transpiler by encoding them solely at the type level. 
-
 
 
 \subsection{Permissions as Fractional Grades}
 
 \subsection{Our System}
 
-Our new memory-safe, \textit{linear graded} types are given as follows (where $p \in \mathbb{P}, \mathbb{P} := (0, 1]_{\mathbb{Q}} \cup \{*\}$ is a permission and $x \in V$ is some variable):
-\begin{align*}
-    T_\Sigma \ni \tau, \sigma ::=  \textbf{Int} ~|~ \tau \lolly \sigma ~|~ \tau \otimes \sigma ~|~ \&_p^x \tau 
-\end{align*}
-We now introduce the following typing rules (written $\Gamma \vdash_\Sigma M : \tau$ to distinguish them from our unsafe type system):
-\begin{align*}
-    \judge{LinFunc}{\Gamma, x : \tau \vdash_\Sigma M : \sigma}{ \Gamma \vdash_\Sigma \lambda x . M : \tau \lolly \sigma}\\
-    ~\\
-    \judge{LinFuncApp}{\Gamma_1 \vdash_\Sigma M : \tau \lolly \sigma \hspace{1em} \Gamma_2 \vdash_\Sigma N : \tau}{\Gamma_1 + \Gamma_2 \vdash_\Sigma M N : \sigma}\\
-    ~\\
-    \judge{FracRef}{x : \tau \in \Gamma \hspace{1em} 1 > \sum\limits_{\&_q^x \tau \in \Gamma} q =: r \hspace{1em} p \in (0, 1-r]}{\Gamma \vdash_\Sigma \mkref x : \&^x_p \tau}\\
-\end{align*}
 
 
 
